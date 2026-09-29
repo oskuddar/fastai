@@ -92,6 +92,50 @@
     return linkedText.replace(/\n/g, "<br>");
   }
 
+  function convertLinkSyntax(rootElement) {
+    const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+
+    while (walker.nextNode()) {
+      const parent = walker.currentNode.parentElement;
+      if (!parent?.closest("a, .term")) textNodes.push(walker.currentNode);
+    }
+
+    textNodes.forEach(textNode => {
+      const text = textNode.textContent || "";
+      const linkPattern = /!!(https?:\/\/[^!\s]+)!!/g;
+      let match;
+      let lastIndex = 0;
+      const fragment = document.createDocumentFragment();
+
+      while ((match = linkPattern.exec(text)) !== null) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+
+        const link = document.createElement("a");
+        link.className = "external-link";
+        link.href = match[1];
+        link.dataset.url = match[1];
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.title = match[1];
+        link.textContent = "[link]";
+        fragment.appendChild(link);
+
+        lastIndex = linkPattern.lastIndex;
+      }
+
+      if (lastIndex === 0) return;
+      fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+      textNode.replaceWith(fragment);
+    });
+  }
+
+  function restoreLinkSyntax(rootElement) {
+    rootElement.querySelectorAll("a.external-link[data-url]").forEach(link => {
+      link.replaceWith(document.createTextNode(`!!${link.dataset.url}!!`));
+    });
+  }
+
   function attachConceptClicks(rootElement) {
     rootElement.querySelectorAll(".term, .inline-card-link").forEach(termElement => {
       termElement.onclick = event => {
@@ -207,6 +251,7 @@
   }
 
   function enterNotesEditing() {
+    restoreLinkSyntax(noteArea);
     notesEditing = true;
     noteArea.contentEditable = "true";
     noteArea.classList.add("editing");
@@ -220,6 +265,7 @@
     notesEditing = false;
     noteArea.contentEditable = "false";
     noteArea.classList.remove("editing");
+    convertLinkSyntax(noteArea);
     editNotesBtn.hidden = false;
     saveNotesBtn.hidden = true;
     createCardBtn.hidden = true;
@@ -271,6 +317,13 @@
 
   editNotesBtn.addEventListener("click", enterNotesEditing);
   saveNotesBtn.addEventListener("click", exitNotesEditing);
+  noteArea.addEventListener("keydown", event => {
+    if (!notesEditing || event.key !== "Enter" || event.isComposing) return;
+
+    event.preventDefault();
+    document.execCommand("insertLineBreak");
+  });
+
   createCardBtn.addEventListener("click", event => {
     event.stopPropagation();
     createConceptFromSelection();
@@ -296,5 +349,6 @@
   });
 
   loadState();
+  convertLinkSyntax(noteArea);
   attachConceptClicks(noteArea);
 })();

@@ -67,9 +67,25 @@ button:hover { background: var(--soft); }
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 28px;
-  line-height: 1.8;
+  line-height: 1.45;
   font-size: 18px;
   min-height: 280px;
+}
+
+.note-area > p {
+  margin: 0;
+}
+
+.note-area > div {
+  margin: 0;
+}
+
+.note-area > div:empty,
+.note-area > p:empty,
+.note-area > div:has(> br:only-child),
+.note-area > p:has(> br:only-child) {
+  min-height: 0.45em;
+  line-height: 0.45;
 }
 
 .note-area.editing {
@@ -79,12 +95,17 @@ button:hover { background: var(--soft); }
 
 .term,
 .inline-card-link,
+.external-link,
 .path-link {
   color: var(--link);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
   font-weight: 500;
+}
+
+.external-link {
+  white-space: nowrap;
 }
 
 .concept-card {
