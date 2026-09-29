@@ -44,8 +44,11 @@
   const createShortcutHint = document.getElementById("createShortcutHint");
   const shortcutMessage = document.getElementById("shortcutMessage");
   const exportSnapshotBtn = document.getElementById("exportSnapshotBtn");
+  const editShortcutInput = document.getElementById("editShortcutInput");
+  const editShortcutHint = document.getElementById("editShortcutHint");
 
   const defaultShortcuts = {
+    edit: { code: "KeyD", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
     save: { code: "KeyS", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
     create: { code: "KeyA", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false }
   };
@@ -131,8 +134,12 @@
       const savedState = JSON.parse(savedText);
       if (savedState.noteHtml) noteArea.innerHTML = savedState.noteHtml;
       if (savedState.concepts) concepts = savedState.concepts;
-      if (savedState.shortcuts?.save && savedState.shortcuts?.create) {
-        shortcuts = savedState.shortcuts;
+      if (savedState.shortcuts) {
+        shortcuts = {
+          edit: savedState.shortcuts.edit || defaultShortcuts.edit,
+          save: savedState.shortcuts.save || defaultShortcuts.save,
+          create: savedState.shortcuts.create || defaultShortcuts.create
+        };
       }
     } catch (error) {
       console.warn("Could not load notes.", error);
@@ -156,8 +163,10 @@
   }
 
   function updateShortcutLabels(bindings = shortcuts) {
+    editShortcutInput.textContent = shortcutLabel(bindings.edit);
     saveShortcutInput.textContent = shortcutLabel(bindings.save);
     createShortcutInput.textContent = shortcutLabel(bindings.create);
+    editShortcutHint.textContent = shortcutLabel(bindings.edit, true);
     saveShortcutHint.textContent = shortcutLabel(bindings.save, true);
     createShortcutHint.textContent = shortcutLabel(bindings.create, true);
   }
@@ -200,8 +209,11 @@
   }
 
   function saveShortcutSettings() {
-    if (shortcutLabel(pendingShortcuts.save) === shortcutLabel(pendingShortcuts.create)) {
-      shortcutMessage.textContent = "Save and Create need different shortcuts.";
+    const labels = ["edit", "save", "create"].map(action =>
+      shortcutLabel(pendingShortcuts[action])
+    );
+    if (new Set(labels).size !== labels.length) {
+      shortcutMessage.textContent = "Edit, Save, and Create need different shortcuts.";
       return;
     }
 
@@ -224,7 +236,26 @@
     return linkedText.replace(/\n/g, "<br>");
   }
 
+  function flattenPastedMarkdownLinks(rootElement) {
+    rootElement.querySelectorAll("a[href]:not(.external-link)").forEach(link => {
+      const previousText = link.previousSibling?.nodeType === Node.TEXT_NODE
+        ? link.previousSibling.textContent
+        : "";
+      const nextText = link.nextSibling?.nodeType === Node.TEXT_NODE
+        ? link.nextSibling.textContent
+        : "";
+      const hasOpeningSyntax = /(?:!!|!\\!)\[$/.test(previousText);
+      const hasClosingSyntax = /^\]\(https?:\/\/[^)]+\)!!/.test(nextText);
+
+      if (hasOpeningSyntax && hasClosingSyntax) {
+        link.replaceWith(document.createTextNode(link.textContent));
+      }
+    });
+    rootElement.normalize();
+  }
+
   function convertLinkSyntax(rootElement) {
+    flattenPastedMarkdownLinks(rootElement);
     const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
     const textNodes = [];
 
@@ -235,7 +266,7 @@
 
     textNodes.forEach(textNode => {
       const text = textNode.textContent || "";
-      const linkPattern = /!!(?:\[[^\]]*\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^!\s]+))!!/g;
+      const linkPattern = /(?:!!|!\\!)(?:\[[^\]]*\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^!\s]+))!!/g;
       let match;
       let lastIndex = 0;
       const fragment = document.createDocumentFragment();
@@ -603,6 +634,14 @@
     moveCaretOutsideTermBoundary();
   });
 
+  noteArea.addEventListener("paste", event => {
+    if (!notesEditing) return;
+
+    event.preventDefault();
+    const plainText = event.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, plainText);
+  });
+
   createCardBtn.addEventListener("click", event => {
     event.stopPropagation();
     createConceptFromSelection();
@@ -631,11 +670,18 @@
     shortcutMessage.textContent = "";
     updateShortcutLabels(pendingShortcuts);
   });
+  editShortcutInput.addEventListener("keydown", event => recordShortcut(event, "edit"));
   saveShortcutInput.addEventListener("keydown", event => recordShortcut(event, "save"));
   createShortcutInput.addEventListener("keydown", event => recordShortcut(event, "create"));
 
   document.addEventListener("keydown", event => {
     if (isPublicView || event.repeat || shortcutDialog.open) return;
+
+    if (shortcutMatches(event, shortcuts.edit)) {
+      event.preventDefault();
+      if (!notesEditing) enterNotesEditing();
+      return;
+    }
 
     if (shortcutMatches(event, shortcuts.save)) {
       event.preventDefault();

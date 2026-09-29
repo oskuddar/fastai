@@ -21,7 +21,10 @@
 
     <div class="workspace">
       <aside class="toolbar" aria-label="Note actions">
-        <button id="editNotesBtn" type="button">Edit notes</button>
+        <button id="editNotesBtn" type="button">
+          <span>Edit notes</span>
+          <kbd id="editShortcutHint">⌥ D</kbd>
+        </button>
         <button id="saveNotesBtn" type="button" hidden>
           <span>Save notes</span>
           <kbd id="saveShortcutHint">⌥ S</kbd>
@@ -55,6 +58,10 @@
     <p class="shortcut-help">Choose a field, then press the shortcut you want to use.</p>
 
     <div class="shortcut-fields">
+      <label>
+        <span>Edit notes</span>
+        <button id="editShortcutInput" class="shortcut-recorder" type="button">Option + D</button>
+      </label>
       <label>
         <span>Save notes</span>
         <button id="saveShortcutInput" class="shortcut-recorder" type="button">Option + S</button>
@@ -101,6 +108,6 @@
     </div>
   </aside>
 
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
