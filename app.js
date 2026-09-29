@@ -1,46 +1,18 @@
 (() => {
-  const STORAGE_KEY = "oskuddar-fastai-static-v1";
+  const STORAGE_KEY = "oskuddar-fastai-static-v2";
 
   const defaultConcepts = {
     resnet18: {
       title: "ResNet18",
-      description: "An 18-layer residual convolutional neural network architecture.",
-      remember: [
-        "Uses residual or skip connections.",
-        "Smaller and faster than deeper ResNet variants.",
-        "A useful baseline for image classification.",
-        "Often used with transfer learning."
-      ],
-      experience: [
-        "Add your own observations here."
-      ],
-      related: ["PyTorch"]
+      text: "An 18-layer residual convolutional neural network architecture.\n\nUses residual or skip connections and is a useful lightweight baseline for image classification.\n\nBuilt with [[PyTorch]]."
     },
     pytorch: {
       title: "PyTorch",
-      description: "A Python framework for building and training neural networks.",
-      remember: [
-        "Provides automatic differentiation.",
-        "Supports GPU computation.",
-        "Used underneath fastai."
-      ],
-      experience: [
-        "Add practical things you discover while using it."
-      ],
-      related: ["Tensor"]
+      text: "A Python framework for building and training neural networks.\n\nIts core data structure is the [[Tensor]]."
     },
     tensor: {
       title: "Tensor",
-      description: "A multidimensional array used to store data, model parameters, and intermediate values.",
-      remember: [
-        "Conceptually similar to a NumPy array.",
-        "Can live on CPU or GPU.",
-        "Used throughout PyTorch models."
-      ],
-      experience: [
-        "Add your own tensor-related reminders here."
-      ],
-      related: ["PyTorch"]
+      text: "A multidimensional array used to store data, model parameters, and intermediate values.\n\nCommonly used throughout [[PyTorch]]."
     }
   };
 
@@ -60,11 +32,8 @@
   const editCardBtn = document.getElementById("editCardBtn");
   const saveCardBtn = document.getElementById("saveCardBtn");
   const cancelCardBtn = document.getElementById("cancelCardBtn");
-
-  const descriptionInput = document.getElementById("descriptionInput");
-  const rememberInput = document.getElementById("rememberInput");
-  const experienceInput = document.getElementById("experienceInput");
-  const relatedInput = document.getElementById("relatedInput");
+  const deleteCardBtn = document.getElementById("deleteCardBtn");
+  const cardTextInput = document.getElementById("cardTextInput");
 
   let concepts = structuredClone(defaultConcepts);
   let historyStack = [];
@@ -110,38 +79,31 @@
     try {
       const savedState = JSON.parse(rawState);
 
-      if (savedState.noteHtml) {
-        noteArea.innerHTML = savedState.noteHtml;
-      }
-
-      if (savedState.concepts) {
-        concepts = savedState.concepts;
-      }
+      if (savedState.noteHtml) noteArea.innerHTML = savedState.noteHtml;
+      if (savedState.concepts) concepts = savedState.concepts;
     } catch (error) {
       console.warn("Could not load saved notes.", error);
     }
   }
 
-  function buildRelatedHtml(relatedTitles) {
-    if (!relatedTitles?.length) {
-      return "<p>None yet.</p>";
-    }
+  function renderCardText(rawText) {
+    const escapedText = escapeHtml(rawText || "");
 
-    const relatedHtml = relatedTitles.map(title => {
-      const relatedKey = conceptKeyFromTitle(title);
+    const withLinks = escapedText.replace(
+      /\[\[([^\]]+)\]\]/g,
+      (match, title) => {
+        const key = conceptKeyFromTitle(title);
+        if (!key) return escapeHtml(title);
 
-      if (!relatedKey) {
-        return `<span>${escapeHtml(title)}</span>`;
+        return `<span class="inline-card-link" data-concept="${escapeHtml(key)}">${escapeHtml(concepts[key].title)}</span>`;
       }
+    );
 
-      return `<span class="term" data-concept="${escapeHtml(relatedKey)}">${escapeHtml(concepts[relatedKey].title)}</span>`;
-    });
-
-    return `<p>${relatedHtml.join(", ")}</p>`;
+    return withLinks.replace(/\n/g, "<br>");
   }
 
   function attachConceptClicks(rootElement) {
-    rootElement.querySelectorAll(".term").forEach(termElement => {
+    rootElement.querySelectorAll(".term, .inline-card-link").forEach(termElement => {
       termElement.onclick = () => {
         if (notesEditing && rootElement === noteArea) return;
         renderConcept(termElement.dataset.concept, true);
@@ -201,27 +163,7 @@
 
     currentConceptKey = conceptKey;
     cardTitle.textContent = concept.title;
-
-    const rememberItems = (concept.remember || [])
-      .map(item => `<li>${escapeHtml(item)}</li>`)
-      .join("");
-
-    const experienceItems = (concept.experience || [])
-      .map(item => `<li>${escapeHtml(item)}</li>`)
-      .join("");
-
-    cardView.innerHTML = `
-      <p>${escapeHtml(concept.description || "")}</p>
-
-      <div class="section-title">What I want to remember</div>
-      <ul>${rememberItems}</ul>
-
-      <div class="section-title">My experience</div>
-      <ul>${experienceItems}</ul>
-
-      <div class="section-title">Related</div>
-      ${buildRelatedHtml(concept.related || [])}
-    `;
+    cardView.innerHTML = renderCardText(concept.text || "");
 
     cardEditor.hidden = true;
     cardView.hidden = false;
@@ -236,40 +178,46 @@
   function startCardEditing() {
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
 
-    const concept = concepts[currentConceptKey];
-
-    descriptionInput.value = concept.description || "";
-    rememberInput.value = (concept.remember || []).join("\n");
-    experienceInput.value = (concept.experience || []).join("\n");
-    relatedInput.value = (concept.related || []).join(", ");
-
+    cardTextInput.value = concepts[currentConceptKey].text || "";
     cardView.hidden = true;
     cardEditor.hidden = false;
     editCardBtn.hidden = true;
+    cardTextInput.focus();
   }
 
   function saveCurrentCard() {
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
 
-    concepts[currentConceptKey].description = descriptionInput.value.trim();
-
-    concepts[currentConceptKey].remember = rememberInput.value
-      .split("\n")
-      .map(line => line.trim())
-      .filter(Boolean);
-
-    concepts[currentConceptKey].experience = experienceInput.value
-      .split("\n")
-      .map(line => line.trim())
-      .filter(Boolean);
-
-    concepts[currentConceptKey].related = relatedInput.value
-      .split(",")
-      .map(item => item.trim())
-      .filter(Boolean);
-
+    concepts[currentConceptKey].text = cardTextInput.value;
     saveState();
     renderConcept(currentConceptKey, false);
+  }
+
+  function unlinkConceptEverywhere(conceptKey) {
+    noteArea.querySelectorAll(`[data-concept="${CSS.escape(conceptKey)}"]`).forEach(element => {
+      const textNode = document.createTextNode(element.textContent);
+      element.replaceWith(textNode);
+    });
+  }
+
+  function deleteCurrentCard() {
+    if (!currentConceptKey || !concepts[currentConceptKey]) return;
+
+    const title = concepts[currentConceptKey].title;
+    const confirmed = confirm(`Delete the "${title}" card and remove its links from the notes?`);
+    if (!confirmed) return;
+
+    unlinkConceptEverywhere(currentConceptKey);
+    delete concepts[currentConceptKey];
+
+    historyStack = historyStack.filter(key => key !== currentConceptKey);
+    currentConceptKey = null;
+
+    saveState();
+
+    conceptCard.classList.remove("open");
+    pathTrail.replaceChildren();
+    attachConceptClicks(noteArea);
   }
 
   function enterNotesEditing() {
@@ -320,15 +268,11 @@
 
     if (!conceptKey) {
       conceptKey = slugify(selectedText);
-
       if (!conceptKey) return;
 
       concepts[conceptKey] = {
         title: selectedText,
-        description: "",
-        remember: [],
-        experience: [],
-        related: []
+        text: ""
       };
     }
 
@@ -339,7 +283,6 @@
 
     selectedRange.deleteContents();
     selectedRange.insertNode(termSpan);
-
     selection.removeAllRanges();
 
     saveState();
@@ -353,6 +296,7 @@
 
   editCardBtn.addEventListener("click", startCardEditing);
   saveCardBtn.addEventListener("click", saveCurrentCard);
+  deleteCardBtn.addEventListener("click", deleteCurrentCard);
 
   cancelCardBtn.addEventListener("click", () => {
     renderConcept(currentConceptKey, false);
@@ -360,7 +304,6 @@
 
   backBtn.addEventListener("click", () => {
     if (!historyStack.length) return;
-
     const previousKey = historyStack.pop();
     renderConcept(previousKey, false);
   });

@@ -10,6 +10,7 @@
   --border: #e5e7eb;
   --link: #2563eb;
   --soft: #f8fafc;
+  --danger: #b42318;
   --shadow: 0 18px 50px rgba(0, 0, 0, 0.14);
 }
 
@@ -66,6 +67,11 @@ button:hover {
 
 .secondary {
   color: var(--muted);
+}
+
+.danger {
+  color: var(--danger);
+  border-color: #f1c0bb;
 }
 
 .note-area {
@@ -131,51 +137,29 @@ button:hover {
   font-size: 24px;
 }
 
-.section-title {
-  margin-top: 18px;
-  margin-bottom: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.card-freeform {
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
-.concept-card p,
-.concept-card li {
-  line-height: 1.55;
-}
-
-.concept-card ul {
-  margin-top: 8px;
-  padding-left: 20px;
-}
-
-.concept-card label {
-  display: block;
-  margin: 14px 0;
-  font-weight: 600;
-}
-
-.concept-card textarea,
-.concept-card input {
+.card-text-input {
   width: 100%;
-  margin-top: 6px;
+  min-height: 220px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px;
+  border-radius: 10px;
+  padding: 12px;
   font: inherit;
+  line-height: 1.55;
   color: var(--text);
   background: #fff;
-}
-
-.concept-card textarea {
-  min-height: 84px;
   resize: vertical;
 }
 
 .editor-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .card-footer {
@@ -199,6 +183,13 @@ button:hover {
 
 .path-separator {
   padding: 0 5px;
+}
+
+.inline-card-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 @media (max-width: 700px) {

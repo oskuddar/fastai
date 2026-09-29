@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <h1>Fastai Learning Notes</h1>
-        <p class="subtitle">Write notes, turn terms into concept cards, and navigate through them.</p>
+        <p class="subtitle">Write notes and turn terms into connected concept cards.</p>
       </div>
 
       <div class="toolbar">
@@ -34,10 +34,6 @@
         where inputs and parameters are represented as
         <span class="term" data-concept="tensor">tensors</span>.
       </p>
-
-      <p>
-        I want these notes to contain definitions as well as things I learn from experience.
-      </p>
     </section>
   </main>
 
@@ -50,32 +46,15 @@
       <button id="closeBtn" type="button" aria-label="Close">✕</button>
     </div>
 
-    <div id="cardView"></div>
+    <div id="cardView" class="card-freeform"></div>
 
     <div id="cardEditor" hidden>
-      <label>
-        What is it?
-        <textarea id="descriptionInput"></textarea>
-      </label>
-
-      <label>
-        What do I want to remember?
-        <textarea id="rememberInput" placeholder="One item per line"></textarea>
-      </label>
-
-      <label>
-        My experience
-        <textarea id="experienceInput" placeholder="One item per line"></textarea>
-      </label>
-
-      <label>
-        Related concepts
-        <input id="relatedInput" type="text" placeholder="PyTorch, Tensor" />
-      </label>
+      <textarea id="cardTextInput" class="card-text-input" placeholder="Write whatever you want to remember..."></textarea>
 
       <div class="editor-actions">
         <button id="saveCardBtn" type="button">Save card</button>
         <button id="cancelCardBtn" type="button" class="secondary">Cancel</button>
+        <button id="deleteCardBtn" type="button" class="danger">Delete card</button>
       </div>
     </div>
 
