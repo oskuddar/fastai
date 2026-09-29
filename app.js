@@ -1,5 +1,8 @@
 (() => {
   const STORAGE_KEY = "oskuddar-fastai-freeform-v3";
+  const PUBLIC_STATE_URL = "published-state.json";
+  const isPublicView = location.hostname === "oskuddar.github.io" ||
+    new URLSearchParams(location.search).has("public-preview");
 
   const defaultConcepts = {
     resnet18: {
@@ -40,6 +43,7 @@
   const saveShortcutHint = document.getElementById("saveShortcutHint");
   const createShortcutHint = document.getElementById("createShortcutHint");
   const shortcutMessage = document.getElementById("shortcutMessage");
+  const exportSnapshotBtn = document.getElementById("exportSnapshotBtn");
 
   const defaultShortcuts = {
     save: { code: "KeyS", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
@@ -75,6 +79,8 @@
   }
 
   function saveState() {
+    if (isPublicView) return;
+
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -83,6 +89,38 @@
         shortcuts: shortcuts
       })
     );
+  }
+
+  async function loadPublishedState() {
+    const response = await fetch(`${PUBLIC_STATE_URL}?v=${Date.now()}`, {
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error("Published notes are unavailable.");
+
+    const publishedState = await response.json();
+    noteArea.innerHTML = publishedState.noteHtml || "";
+    concepts = publishedState.concepts || {};
+  }
+
+  function exportPublicSnapshot() {
+    if (notesEditing) exitNotesEditing();
+
+    const snapshot = {
+      noteHtml: noteArea.innerHTML,
+      concepts: concepts,
+      publishedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+      type: "application/json"
+    });
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement("a");
+    downloadLink.href = downloadUrl;
+    downloadLink.download = "published-state.json";
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    downloadLink.remove();
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
   }
 
   function loadState() {
@@ -430,8 +468,8 @@
 
     cardView.hidden = false;
     cardEditor.hidden = true;
-    editCardBtn.hidden = false;
-    deleteCardBtn.hidden = false;
+    editCardBtn.hidden = isPublicView;
+    deleteCardBtn.hidden = isPublicView;
     conceptCard.classList.add("open");
     backBtn.disabled = historyStack.length === 0;
 
@@ -440,6 +478,7 @@
   }
 
   function startCardEditing() {
+    if (isPublicView) return;
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
     cardTextInput.value = concepts[currentConceptKey].text || "";
     cardView.hidden = true;
@@ -465,6 +504,7 @@
   }
 
   function deleteCurrentCard() {
+    if (isPublicView) return;
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
 
     const deletedKey = currentConceptKey;
@@ -480,6 +520,7 @@
   }
 
   function enterNotesEditing() {
+    if (isPublicView) return;
     normalizeTermBoundaries(noteArea);
     restoreLinkSyntax(noteArea);
     notesEditing = true;
@@ -506,6 +547,7 @@
   }
 
   function createConceptFromSelection() {
+    if (isPublicView) return;
     const selection = window.getSelection();
 
     if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) {
@@ -580,6 +622,7 @@
   closeBtn.addEventListener("click", closeCard);
 
   shortcutSettingsBtn.addEventListener("click", openShortcutDialog);
+  exportSnapshotBtn.addEventListener("click", exportPublicSnapshot);
   closeShortcutDialogBtn.addEventListener("click", () => shortcutDialog.close());
   cancelShortcutsBtn.addEventListener("click", () => shortcutDialog.close());
   saveShortcutsBtn.addEventListener("click", saveShortcutSettings);
@@ -592,7 +635,7 @@
   createShortcutInput.addEventListener("keydown", event => recordShortcut(event, "create"));
 
   document.addEventListener("keydown", event => {
-    if (event.repeat || shortcutDialog.open) return;
+    if (isPublicView || event.repeat || shortcutDialog.open) return;
 
     if (shortcutMatches(event, shortcuts.save)) {
       event.preventDefault();
@@ -617,9 +660,29 @@
     }
   });
 
-  loadState();
-  normalizeTermBoundaries(noteArea);
-  convertLinkSyntax(noteArea);
-  attachConceptClicks(noteArea);
-  updateShortcutLabels();
+  async function initialize() {
+    if (isPublicView) {
+      document.body.classList.add("public-view");
+      document.querySelector(".toolbar").hidden = true;
+      shortcutSettingsBtn.hidden = true;
+      exportSnapshotBtn.hidden = true;
+
+      try {
+        await loadPublishedState();
+      } catch (error) {
+        console.warn(error.message);
+        noteArea.innerHTML = "<p>No notes have been published yet.</p>";
+        concepts = {};
+      }
+    } else {
+      loadState();
+    }
+
+    normalizeTermBoundaries(noteArea);
+    convertLinkSyntax(noteArea);
+    attachConceptClicks(noteArea);
+    updateShortcutLabels();
+  }
+
+  initialize();
 })();

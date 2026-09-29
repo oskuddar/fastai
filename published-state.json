@@ -1,0 +1,14 @@
+{
+  "noteHtml": "<p>For this project we can use <span class=\"term\" data-concept=\"resnet18\">ResNet18</span> because it is relatively lightweight and works well for transfer learning.</p><p>In fastai, the model is usually backed by <span class=\"term\" data-concept=\"pytorch\">PyTorch</span>.</p>",
+  "concepts": {
+    "resnet18": {
+      "title": "ResNet18",
+      "text": "An 18-layer residual convolutional neural network architecture.\n\nUses residual/skip connections.\n\nImplemented in frameworks such as [[PyTorch]]."
+    },
+    "pytorch": {
+      "title": "PyTorch",
+      "text": "A Python framework for building and training neural networks.\n\nYou can write anything you want in this card."
+    }
+  },
+  "publishedAt": null
+}
