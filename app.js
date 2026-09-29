@@ -103,7 +103,7 @@
 
     textNodes.forEach(textNode => {
       const text = textNode.textContent || "";
-      const linkPattern = /!!(https?:\/\/[^!\s]+)!!/g;
+      const linkPattern = /!!(?:\[[^\]]*\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^!\s]+))!!/g;
       let match;
       let lastIndex = 0;
       const fragment = document.createDocumentFragment();
@@ -111,13 +111,14 @@
       while ((match = linkPattern.exec(text)) !== null) {
         fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
 
+        const url = match[1] || match[2];
         const link = document.createElement("a");
         link.className = "external-link";
-        link.href = match[1];
-        link.dataset.url = match[1];
+        link.href = url;
+        link.dataset.url = url;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-        link.title = match[1];
+        link.title = url;
         link.textContent = "[link]";
         fragment.appendChild(link);
 
