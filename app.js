@@ -94,11 +94,19 @@
 
   function attachConceptClicks(rootElement) {
     rootElement.querySelectorAll(".term, .inline-card-link").forEach(termElement => {
-      termElement.onclick = () => {
+      termElement.onclick = event => {
         if (notesEditing && rootElement === noteArea) return;
+        event.stopPropagation();
         renderConcept(termElement.dataset.concept, true);
       };
     });
+  }
+
+  function closeCard() {
+    conceptCard.classList.remove("open");
+    historyStack = [];
+    currentConceptKey = null;
+    pathTrail.replaceChildren();
   }
 
   function renderPath() {
@@ -186,9 +194,6 @@
   function deleteCurrentCard() {
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
 
-    const title = concepts[currentConceptKey].title;
-    if (!confirm(`Delete the "${title}" card and unlink it from the notes?`)) return;
-
     const deletedKey = currentConceptKey;
     unlinkConceptEverywhere(deletedKey);
     delete concepts[deletedKey];
@@ -197,8 +202,7 @@
     currentConceptKey = null;
 
     saveState();
-    conceptCard.classList.remove("open");
-    pathTrail.replaceChildren();
+    closeCard();
     attachConceptClicks(noteArea);
   }
 
@@ -267,7 +271,10 @@
 
   editNotesBtn.addEventListener("click", enterNotesEditing);
   saveNotesBtn.addEventListener("click", exitNotesEditing);
-  createCardBtn.addEventListener("click", createConceptFromSelection);
+  createCardBtn.addEventListener("click", event => {
+    event.stopPropagation();
+    createConceptFromSelection();
+  });
 
   editCardBtn.addEventListener("click", startCardEditing);
   saveCardBtn.addEventListener("click", saveCurrentCard);
@@ -280,11 +287,12 @@
     renderConcept(previousKey, false);
   });
 
-  closeBtn.addEventListener("click", () => {
-    conceptCard.classList.remove("open");
-    historyStack = [];
-    currentConceptKey = null;
-    pathTrail.replaceChildren();
+  closeBtn.addEventListener("click", closeCard);
+
+  document.addEventListener("click", event => {
+    if (conceptCard.classList.contains("open") && !conceptCard.contains(event.target)) {
+      closeCard();
+    }
   });
 
   loadState();

@@ -94,6 +94,7 @@ button:hover { background: var(--soft); }
   width: min(440px, calc(100vw - 32px));
   max-height: 72vh;
   overflow-y: auto;
+  overflow-x: hidden;
   display: none;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -117,13 +118,20 @@ button:hover { background: var(--soft); }
   display: flex;
   gap: 10px;
   align-items: center;
+  min-width: 0;
 }
 
-.card-title-row h2 { margin: 0; font-size: 24px; }
+.card-title-row h2 {
+  margin: 0;
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
 
 .card-freeform {
-  line-height: 1.65;
+  line-height: 1.35;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .card-text-input {
@@ -147,10 +155,17 @@ button:hover { background: var(--soft); }
   padding-top: 14px;
 }
 
+.card-footer-buttons button {
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 13px;
+}
+
 .path-trail {
   margin-top: 12px;
   font-size: 13px;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .path-separator { padding: 0 5px; }
