@@ -1,0 +1,214 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --link: #2563eb;
+  --soft: #f8fafc;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.14);
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 44px 24px 120px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 34px;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  border-radius: 9px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover {
+  background: var(--soft);
+}
+
+.secondary {
+  color: var(--muted);
+}
+
+.note-area {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  line-height: 1.8;
+  font-size: 18px;
+  min-height: 280px;
+}
+
+.note-area.editing {
+  outline: 2px solid #bfdbfe;
+  outline-offset: 2px;
+}
+
+.term {
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.concept-card {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 72vh;
+  overflow-y: auto;
+  display: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 22px;
+  z-index: 1000;
+}
+
+.concept-card.open {
+  display: block;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.card-title-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.card-title-row h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.section-title {
+  margin-top: 18px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.concept-card p,
+.concept-card li {
+  line-height: 1.55;
+}
+
+.concept-card ul {
+  margin-top: 8px;
+  padding-left: 20px;
+}
+
+.concept-card label {
+  display: block;
+  margin: 14px 0;
+  font-weight: 600;
+}
+
+.concept-card textarea,
+.concept-card input {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px;
+  font: inherit;
+  color: var(--text);
+  background: #fff;
+}
+
+.concept-card textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.card-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.path-trail {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.path-link {
+  color: var(--link);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.path-separator {
+  padding: 0 5px;
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    flex-direction: column;
+  }
+
+  .concept-card {
+    right: 16px;
+    bottom: 16px;
+    width: calc(100vw - 32px);
+  }
+}
