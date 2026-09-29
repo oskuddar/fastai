@@ -369,7 +369,6 @@
   function attachConceptClicks(rootElement) {
     rootElement.querySelectorAll(".term, .inline-card-link").forEach(termElement => {
       termElement.onclick = event => {
-        if (notesEditing && rootElement === noteArea) return;
         event.stopPropagation();
         renderConcept(termElement.dataset.concept, true);
       };
