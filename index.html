@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fastai Learning Notes</title>
+  <link rel="stylesheet" href="style.css?v=3" />
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <h1>Fastai Learning Notes</h1>
+        <p class="subtitle">Write notes and turn any term into a connected card.</p>
+      </div>
+
+      <div class="toolbar">
+        <button id="editNotesBtn" type="button">Edit notes</button>
+        <button id="saveNotesBtn" type="button" hidden>Save notes</button>
+        <button id="createCardBtn" type="button" hidden>Create card from selected text</button>
+      </div>
+    </header>
+
+    <section id="noteArea" class="note-area">
+      <p>
+        For this project we can use
+        <span class="term" data-concept="resnet18">ResNet18</span>
+        because it is relatively lightweight and works well for transfer learning.
+      </p>
+
+      <p>
+        In fastai, the model is usually backed by
+        <span class="term" data-concept="pytorch">PyTorch</span>.
+      </p>
+    </section>
+  </main>
+
+  <aside id="conceptCard" class="concept-card" aria-live="polite">
+    <div class="card-header">
+      <div class="card-title-row">
+        <button id="backBtn" type="button" aria-label="Back">←</button>
+        <h2 id="cardTitle"></h2>
+      </div>
+      <button id="closeBtn" type="button" aria-label="Close">✕</button>
+    </div>
+
+    <div id="cardView" class="card-freeform"></div>
+
+    <div id="cardEditor" hidden>
+      <textarea id="cardTextInput" class="card-text-input" placeholder="Write anything you want..."></textarea>
+      <div class="editor-actions">
+        <button id="saveCardBtn" type="button">Save</button>
+        <button id="cancelCardBtn" type="button" class="secondary">Cancel</button>
+      </div>
+    </div>
+
+    <div class="card-footer">
+      <div class="card-footer-buttons">
+        <button id="editCardBtn" type="button">Edit card</button>
+        <button id="deleteCardBtn" type="button" class="danger">Delete card</button>
+      </div>
+      <div id="pathTrail" class="path-trail"></div>
+    </div>
+  </aside>
+
+  <script src="app.js?v=3"></script>
+</body>
+</html>
