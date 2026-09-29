@@ -231,6 +231,67 @@
     });
   }
 
+  function normalizeTermBoundaries(rootElement) {
+    rootElement.querySelectorAll(".term[data-concept]").forEach(term => {
+      const concept = concepts[term.dataset.concept];
+      if (!concept) return;
+
+      const actualText = term.textContent || "";
+      const expectedText = concept.title;
+      if (actualText === expectedText) return;
+
+      const expectedLength = expectedText.length;
+      const prefix = actualText.slice(0, expectedLength);
+      const suffix = actualText.slice(-expectedLength);
+
+      if (prefix.toLowerCase() === expectedText.toLowerCase()) {
+        const extraText = actualText.slice(expectedLength);
+        term.textContent = prefix;
+        if (extraText) term.after(document.createTextNode(extraText));
+      } else if (suffix.toLowerCase() === expectedText.toLowerCase()) {
+        const extraText = actualText.slice(0, -expectedLength);
+        term.textContent = suffix;
+        if (extraText) term.before(document.createTextNode(extraText));
+      }
+    });
+  }
+
+  function moveCaretOutsideTermBoundary() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return;
+
+    const range = selection.getRangeAt(0);
+    const caretElement = range.startContainer.nodeType === Node.ELEMENT_NODE
+      ? range.startContainer
+      : range.startContainer.parentElement;
+    const term = caretElement?.closest(".term");
+    if (!term || !noteArea.contains(term)) return;
+
+    const textBeforeCaret = document.createRange();
+    textBeforeCaret.selectNodeContents(term);
+    textBeforeCaret.setEnd(range.startContainer, range.startOffset);
+
+    const textAfterCaret = document.createRange();
+    textAfterCaret.selectNodeContents(term);
+    textAfterCaret.setStart(range.startContainer, range.startOffset);
+
+    let marker;
+    if (textAfterCaret.toString() === "") {
+      marker = document.createTextNode("\u200B");
+      term.after(marker);
+    } else if (textBeforeCaret.toString() === "") {
+      marker = document.createTextNode("\u200B");
+      term.before(marker);
+    } else {
+      return;
+    }
+
+    range.setStart(marker, marker.textContent.length);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   function removeEditorMarkers(rootElement) {
     const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
     const textNodes = [];
@@ -420,6 +481,7 @@
   }
 
   function enterNotesEditing() {
+    normalizeTermBoundaries(noteArea);
     restoreLinkSyntax(noteArea);
     notesEditing = true;
     noteArea.contentEditable = "true";
@@ -434,6 +496,7 @@
     notesEditing = false;
     noteArea.contentEditable = "false";
     noteArea.classList.remove("editing");
+    normalizeTermBoundaries(noteArea);
     removeEditorMarkers(noteArea);
     convertLinkSyntax(noteArea);
     editNotesBtn.hidden = false;
@@ -494,6 +557,11 @@
     insertPlainLineBreak();
   });
 
+  noteArea.addEventListener("beforeinput", event => {
+    if (!notesEditing || !event.inputType.startsWith("insert")) return;
+    moveCaretOutsideTermBoundary();
+  });
+
   createCardBtn.addEventListener("click", event => {
     event.stopPropagation();
     createConceptFromSelection();
@@ -551,6 +619,7 @@
   });
 
   loadState();
+  normalizeTermBoundaries(noteArea);
   convertLinkSyntax(noteArea);
   attachConceptClicks(noteArea);
   updateShortcutLabels();
