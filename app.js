@@ -231,6 +231,80 @@
     });
   }
 
+  function removeEditorMarkers(rootElement) {
+    const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach(textNode => {
+      textNode.textContent = textNode.textContent.replace(/\u200B/g, "");
+    });
+    rootElement.normalize();
+  }
+
+  function insertPlainLineBreak() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    if (!noteArea.contains(range.commonAncestorContainer)) return;
+
+    range.deleteContents();
+
+    const marker = document.createTextNode("\u200B");
+    range.insertNode(marker);
+
+    const block = marker.parentElement?.closest(
+      "p, div, li, blockquote, h1, h2, h3, h4, h5, h6"
+    ) || noteArea;
+
+    while (marker.parentNode && marker.parentNode !== block) {
+      const inlineParent = marker.parentNode;
+      const rightSide = inlineParent.cloneNode(false);
+
+      while (marker.nextSibling) rightSide.appendChild(marker.nextSibling);
+      inlineParent.after(marker);
+      if (rightSide.hasChildNodes()) marker.after(rightSide);
+    }
+
+    let trailingNode = marker.nextSibling;
+    while (trailingNode) {
+      const nextNode = trailingNode.nextSibling;
+      const visibleText = (trailingNode.textContent || "")
+        .replace(/\u200B/g, "")
+        .trim();
+      const containsMedia = trailingNode.nodeType === Node.ELEMENT_NODE &&
+        trailingNode.querySelector("img, video, audio, iframe");
+
+      if (visibleText || containsMedia) break;
+      trailingNode.remove();
+      trailingNode = nextNode;
+    }
+
+    if (block !== noteArea && !marker.nextSibling) {
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+      textNodes.forEach(textNode => {
+        if (textNode !== marker) {
+          textNode.textContent = textNode.textContent.replace(/\u200B/g, "");
+        }
+      });
+
+      const plainLine = document.createElement("div");
+      plainLine.className = "note-line";
+      plainLine.appendChild(marker);
+      block.after(plainLine);
+    } else {
+      marker.before(document.createElement("br"));
+    }
+
+    range.setStart(marker, marker.textContent.length);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   function attachConceptClicks(rootElement) {
     rootElement.querySelectorAll(".term, .inline-card-link").forEach(termElement => {
       termElement.onclick = event => {
@@ -360,6 +434,7 @@
     notesEditing = false;
     noteArea.contentEditable = "false";
     noteArea.classList.remove("editing");
+    removeEditorMarkers(noteArea);
     convertLinkSyntax(noteArea);
     editNotesBtn.hidden = false;
     saveNotesBtn.hidden = true;
@@ -416,7 +491,7 @@
     if (!notesEditing || event.key !== "Enter" || event.isComposing) return;
 
     event.preventDefault();
-    document.execCommand("insertLineBreak");
+    insertPlainLineBreak();
   });
 
   createCardBtn.addEventListener("click", event => {
