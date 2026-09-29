@@ -20,7 +20,7 @@ body {
 }
 
 .page {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 44px 24px 120px;
 }
@@ -36,7 +36,46 @@ body {
 h1 { margin: 0 0 6px; font-size: 34px; }
 .subtitle { margin: 0; color: var(--muted); }
 
-.toolbar,
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 900px) 220px;
+  gap: 24px;
+  align-items: start;
+}
+
+.note-area { grid-column: 1; grid-row: 1; }
+
+.toolbar {
+  grid-column: 2;
+  grid-row: 1;
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.toolbar button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.toolbar button[hidden] { display: none; }
+
+.toolbar kbd {
+  color: var(--muted);
+  font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
 .card-footer-buttons,
 .editor-actions {
   display: flex;
@@ -191,11 +230,86 @@ button:hover { background: var(--soft); }
 
 .path-separator { padding: 0 5px; }
 
-@media (max-width: 700px) {
+.shortcut-dialog {
+  width: min(460px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 22px;
+  color: var(--text);
+}
+
+.shortcut-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.dialog-header,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dialog-header {
+  justify-content: space-between;
+}
+
+.dialog-header h2 { margin: 0; font-size: 22px; }
+.shortcut-help { margin: 10px 0 18px; color: var(--muted); }
+
+.shortcut-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.shortcut-fields label {
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  align-items: center;
+  gap: 16px;
+}
+
+.shortcut-recorder {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.shortcut-recorder:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.shortcut-message {
+  min-height: 20px;
+  margin: 12px 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
   .topbar { flex-direction: column; }
+  .workspace { display: flex; flex-direction: column; }
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .toolbar button { width: auto; }
+  .note-area { width: 100%; }
   .concept-card {
     right: 16px;
     bottom: 16px;
     width: calc(100vw - 32px);
   }
+}
+
+@media (max-width: 520px) {
+  .shortcut-fields label { grid-template-columns: 1fr; gap: 6px; }
 }

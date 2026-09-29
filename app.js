@@ -29,11 +29,29 @@
   const saveCardBtn = document.getElementById("saveCardBtn");
   const cancelCardBtn = document.getElementById("cancelCardBtn");
   const cardTextInput = document.getElementById("cardTextInput");
+  const shortcutSettingsBtn = document.getElementById("shortcutSettingsBtn");
+  const shortcutDialog = document.getElementById("shortcutDialog");
+  const closeShortcutDialogBtn = document.getElementById("closeShortcutDialogBtn");
+  const cancelShortcutsBtn = document.getElementById("cancelShortcutsBtn");
+  const saveShortcutsBtn = document.getElementById("saveShortcutsBtn");
+  const resetShortcutsBtn = document.getElementById("resetShortcutsBtn");
+  const saveShortcutInput = document.getElementById("saveShortcutInput");
+  const createShortcutInput = document.getElementById("createShortcutInput");
+  const saveShortcutHint = document.getElementById("saveShortcutHint");
+  const createShortcutHint = document.getElementById("createShortcutHint");
+  const shortcutMessage = document.getElementById("shortcutMessage");
+
+  const defaultShortcuts = {
+    save: { code: "KeyS", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
+    create: { code: "KeyA", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false }
+  };
 
   let concepts = JSON.parse(JSON.stringify(defaultConcepts));
   let historyStack = [];
   let currentConceptKey = null;
   let notesEditing = false;
+  let shortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
+  let pendingShortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
 
   function escapeHtml(value) {
     const temporaryElement = document.createElement("div");
@@ -61,7 +79,8 @@
       STORAGE_KEY,
       JSON.stringify({
         noteHtml: noteArea.innerHTML,
-        concepts: concepts
+        concepts: concepts,
+        shortcuts: shortcuts
       })
     );
   }
@@ -74,9 +93,84 @@
       const savedState = JSON.parse(savedText);
       if (savedState.noteHtml) noteArea.innerHTML = savedState.noteHtml;
       if (savedState.concepts) concepts = savedState.concepts;
+      if (savedState.shortcuts?.save && savedState.shortcuts?.create) {
+        shortcuts = savedState.shortcuts;
+      }
     } catch (error) {
       console.warn("Could not load notes.", error);
     }
+  }
+
+  function shortcutKeyName(code) {
+    if (code.startsWith("Key")) return code.slice(3);
+    if (code.startsWith("Digit")) return code.slice(5);
+    return code.replace("Arrow", "");
+  }
+
+  function shortcutLabel(binding, compact = false) {
+    const parts = [];
+    if (binding.ctrlKey) parts.push(compact ? "⌃" : "Control");
+    if (binding.altKey) parts.push(compact ? "⌥" : "Option");
+    if (binding.shiftKey) parts.push(compact ? "⇧" : "Shift");
+    if (binding.metaKey) parts.push(compact ? "⌘" : "Command");
+    parts.push(shortcutKeyName(binding.code));
+    return parts.join(compact ? " " : " + ");
+  }
+
+  function updateShortcutLabels(bindings = shortcuts) {
+    saveShortcutInput.textContent = shortcutLabel(bindings.save);
+    createShortcutInput.textContent = shortcutLabel(bindings.create);
+    saveShortcutHint.textContent = shortcutLabel(bindings.save, true);
+    createShortcutHint.textContent = shortcutLabel(bindings.create, true);
+  }
+
+  function shortcutMatches(event, binding) {
+    return event.code === binding.code &&
+      event.altKey === binding.altKey &&
+      event.ctrlKey === binding.ctrlKey &&
+      event.metaKey === binding.metaKey &&
+      event.shiftKey === binding.shiftKey;
+  }
+
+  function recordShortcut(event, action) {
+    if (["Alt", "Control", "Meta", "Shift"].includes(event.key)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!event.altKey && !event.ctrlKey && !event.metaKey) {
+      shortcutMessage.textContent = "Include Option, Control, or Command in the shortcut.";
+      return;
+    }
+
+    pendingShortcuts[action] = {
+      code: event.code,
+      altKey: event.altKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey
+    };
+    shortcutMessage.textContent = "";
+    updateShortcutLabels(pendingShortcuts);
+  }
+
+  function openShortcutDialog() {
+    pendingShortcuts = JSON.parse(JSON.stringify(shortcuts));
+    shortcutMessage.textContent = "";
+    updateShortcutLabels(pendingShortcuts);
+    shortcutDialog.showModal();
+  }
+
+  function saveShortcutSettings() {
+    if (shortcutLabel(pendingShortcuts.save) === shortcutLabel(pendingShortcuts.create)) {
+      shortcutMessage.textContent = "Save and Create need different shortcuts.";
+      return;
+    }
+
+    shortcuts = JSON.parse(JSON.stringify(pendingShortcuts));
+    updateShortcutLabels();
+    saveState();
+    shortcutDialog.close();
   }
 
   function renderCardText(rawText) {
@@ -343,8 +437,40 @@
 
   closeBtn.addEventListener("click", closeCard);
 
+  shortcutSettingsBtn.addEventListener("click", openShortcutDialog);
+  closeShortcutDialogBtn.addEventListener("click", () => shortcutDialog.close());
+  cancelShortcutsBtn.addEventListener("click", () => shortcutDialog.close());
+  saveShortcutsBtn.addEventListener("click", saveShortcutSettings);
+  resetShortcutsBtn.addEventListener("click", () => {
+    pendingShortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
+    shortcutMessage.textContent = "";
+    updateShortcutLabels(pendingShortcuts);
+  });
+  saveShortcutInput.addEventListener("keydown", event => recordShortcut(event, "save"));
+  createShortcutInput.addEventListener("keydown", event => recordShortcut(event, "create"));
+
+  document.addEventListener("keydown", event => {
+    if (event.repeat || shortcutDialog.open) return;
+
+    if (shortcutMatches(event, shortcuts.save)) {
+      event.preventDefault();
+      if (notesEditing) exitNotesEditing();
+      return;
+    }
+
+    if (shortcutMatches(event, shortcuts.create)) {
+      event.preventDefault();
+      createConceptFromSelection();
+    }
+  });
+
   document.addEventListener("click", event => {
-    if (conceptCard.classList.contains("open") && !conceptCard.contains(event.target)) {
+    const cardIsBeingEdited = !cardEditor.hidden;
+    if (
+      conceptCard.classList.contains("open") &&
+      !cardIsBeingEdited &&
+      !conceptCard.contains(event.target)
+    ) {
       closeCard();
     }
   });
@@ -352,4 +478,5 @@
   loadState();
   convertLinkSyntax(noteArea);
   attachConceptClicks(noteArea);
+  updateShortcutLabels();
 })();
