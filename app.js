@@ -746,6 +746,8 @@
     convertLinkSyntax(noteArea);
     attachConceptClicks(noteArea);
     updateShortcutLabels();
+
+    if (!isPublicView) enterNotesEditing();
   }
 
   initialize();
