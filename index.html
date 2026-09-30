@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fastai Learning Notes</title>
-  <link rel="stylesheet" href="style.css?v=10" />
+  <link rel="stylesheet" href="style.css?v=11" />
 </head>
 <body>
   <main class="page">
@@ -14,13 +14,27 @@
         <p class="subtitle">Write notes and turn any term into a connected card.</p>
       </div>
       <div class="header-actions">
-        <button id="ownerEditBtn" type="button" hidden>Owner edit</button>
-        <button id="exportSnapshotBtn" type="button">Export public snapshot</button>
-        <button id="shortcutSettingsBtn" type="button">Keyboard shortcuts</button>
+        <span id="saveStatus" class="save-status" role="status" aria-live="polite"></span>
+        <button id="retrySaveBtn" type="button" hidden>Retry save</button>
+        <button id="shortcutSettingsBtn" type="button" hidden>Keyboard shortcuts</button>
+        <button id="signOutBtn" type="button" hidden>Sign out</button>
       </div>
     </header>
 
-    <div class="workspace">
+    <section id="authPanel" class="auth-panel" aria-labelledby="authTitle">
+      <h2 id="authTitle">Sign in to your notes</h2>
+      <p>Sign in with your owner account. Notes are stored online, not on this computer.</p>
+      <form id="loginForm">
+        <label for="emailInput">Email</label>
+        <input id="emailInput" type="email" autocomplete="email" required />
+        <label for="passwordInput">Password</label>
+        <input id="passwordInput" type="password" autocomplete="current-password" required />
+        <button type="submit">Sign in</button>
+      </form>
+      <p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <div class="workspace" hidden>
       <aside class="toolbar" aria-label="Note actions">
         <button id="editNotesBtn" type="button">
           <span>Edit notes</span>
@@ -34,20 +48,10 @@
           <span>Create card</span>
           <kbd id="createShortcutHint">⌥ A</kbd>
         </button>
+        <button id="importLegacyBtn" type="button" hidden>Import old browser notes</button>
       </aside>
 
-      <section id="noteArea" class="note-area">
-        <p>
-          For this project we can use
-          <span class="term" data-concept="resnet18">ResNet18</span>
-          because it is relatively lightweight and works well for transfer learning.
-        </p>
-
-        <p>
-          In fastai, the model is usually backed by
-          <span class="term" data-concept="pytorch">PyTorch</span>.
-        </p>
-      </section>
+      <section id="noteArea" class="note-area"></section>
     </div>
   </main>
 
@@ -81,23 +85,18 @@
     </div>
   </dialog>
 
-  <dialog id="ownerLoginDialog" class="shortcut-dialog">
-    <form id="ownerLoginForm">
-      <div class="dialog-header">
-        <h2>Owner editing</h2>
-        <button id="closeOwnerLoginBtn" type="button" aria-label="Close">✕</button>
-      </div>
-      <p class="shortcut-help">Enter the owner password to edit and export a private draft.</p>
-      <label class="password-field">
-        <span>Password</span>
-        <input id="ownerPasswordInput" type="password" autocomplete="current-password" required />
-      </label>
-      <p id="ownerLoginMessage" class="shortcut-message" aria-live="polite"></p>
-      <div class="dialog-actions">
-        <button id="cancelOwnerLoginBtn" type="button" class="secondary">Cancel</button>
-        <button type="submit">Unlock editor</button>
-      </div>
-    </form>
+  <dialog id="legacyDialog" class="shortcut-dialog">
+    <div class="dialog-header">
+      <h2>Import old notes</h2>
+      <button id="closeLegacyDialogBtn" type="button" aria-label="Close">✕</button>
+    </div>
+    <p class="shortcut-help">Choose a draft saved by the old version of this app on this browser. It will be copied to your online account; the original will remain untouched.</p>
+    <select id="legacySourceSelect" class="legacy-source"></select>
+    <p id="legacyMessage" class="shortcut-message" role="status"></p>
+    <div class="dialog-actions">
+      <button id="cancelLegacyBtn" type="button" class="secondary">Cancel</button>
+      <button id="confirmLegacyBtn" type="button">Import online</button>
+    </div>
   </dialog>
 
   <aside id="conceptCard" class="concept-card" aria-live="polite">
@@ -128,6 +127,8 @@
     </div>
   </aside>
 
-  <script src="app.js?v=20"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

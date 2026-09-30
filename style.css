@@ -44,6 +44,44 @@ h1 { margin: 0 0 6px; font-size: 34px; }
 }
 
 .header-actions button[hidden] { display: none; }
+.workspace[hidden],
+.auth-panel[hidden],
+.auth-panel form[hidden] { display: none; }
+
+.save-status {
+  align-self: center;
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 340px;
+}
+
+.auth-panel {
+  max-width: 520px;
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.auth-panel h2 { margin: 0 0 8px; }
+.auth-panel p { color: var(--muted); }
+.auth-panel form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.auth-panel label { width: 100%; }
+.auth-panel input {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font: inherit;
+}
+.auth-panel .auth-message { min-height: 20px; color: var(--danger); }
 
 .workspace {
   display: grid;
@@ -240,10 +278,6 @@ button:hover { background: var(--soft); }
 
 .path-separator { padding: 0 5px; }
 
-body.public-view .page { max-width: 948px; }
-body.public-view .workspace { grid-template-columns: minmax(0, 900px); }
-body.public-view .note-area { grid-column: 1; }
-
 .shortcut-dialog {
   width: min(460px, calc(100vw - 32px));
   border: 1px solid var(--border);
@@ -292,22 +326,12 @@ body.public-view .note-area { grid-column: 1; }
   outline-offset: 2px;
 }
 
-.password-field {
-  display: grid;
-  gap: 6px;
-}
-
-.password-field input {
+.legacy-source {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 9px 11px;
   font: inherit;
-}
-
-.password-field input:focus {
-  outline: 2px solid #93c5fd;
-  outline-offset: 2px;
 }
 
 .shortcut-message {

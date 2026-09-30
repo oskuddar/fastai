@@ -1,22 +1,19 @@
 (() => {
-  const STORAGE_KEY = "oskuddar-fastai-freeform-v3";
-  const PUBLIC_DRAFT_KEY = `${STORAGE_KEY}-public-draft`;
-  const PUBLIC_STATE_URL = "published-state.json";
-  const EDITOR_PASSWORD_HASH = "8cdb370ee8adf754674fb7afe5cf7a925a2c16c685ad5c3ba695efab4e25c8cc";
-  const isPublicView = location.hostname === "oskuddar.github.io" ||
-    new URLSearchParams(location.search).has("public-preview");
-
-  const defaultConcepts = {
-    resnet18: {
-      title: "ResNet18",
-      text: "An 18-layer residual convolutional neural network architecture.\n\nUses residual/skip connections.\n\nImplemented in frameworks such as [[PyTorch]]."
-    },
-    pytorch: {
-      title: "PyTorch",
-      text: "A Python framework for building and training neural networks.\n\nYou can write anything you want in this card."
-    }
-  };
-
+  const config = window.FASTAI_SUPABASE || {};
+  const authPanel = document.getElementById("authPanel");
+  const authMessage = document.getElementById("authMessage");
+  const loginForm = document.getElementById("loginForm");
+  const emailInput = document.getElementById("emailInput");
+  const passwordInput = document.getElementById("passwordInput");
+  const workspace = document.querySelector(".workspace");
+  const signOutBtn = document.getElementById("signOutBtn");
+  const saveStatus = document.getElementById("saveStatus");
+  const retrySaveBtn = document.getElementById("retrySaveBtn");
+  const importLegacyBtn = document.getElementById("importLegacyBtn");
+  const legacyDialog = document.getElementById("legacyDialog");
+  const legacySourceSelect = document.getElementById("legacySourceSelect");
+  const legacyMessage = document.getElementById("legacyMessage");
+  const confirmLegacyBtn = document.getElementById("confirmLegacyBtn");
   const noteArea = document.getElementById("noteArea");
   const conceptCard = document.getElementById("conceptCard");
   const cardTitle = document.getElementById("cardTitle");
@@ -45,16 +42,8 @@
   const saveShortcutHint = document.getElementById("saveShortcutHint");
   const createShortcutHint = document.getElementById("createShortcutHint");
   const shortcutMessage = document.getElementById("shortcutMessage");
-  const exportSnapshotBtn = document.getElementById("exportSnapshotBtn");
   const editShortcutInput = document.getElementById("editShortcutInput");
   const editShortcutHint = document.getElementById("editShortcutHint");
-  const ownerEditBtn = document.getElementById("ownerEditBtn");
-  const ownerLoginDialog = document.getElementById("ownerLoginDialog");
-  const ownerLoginForm = document.getElementById("ownerLoginForm");
-  const ownerPasswordInput = document.getElementById("ownerPasswordInput");
-  const ownerLoginMessage = document.getElementById("ownerLoginMessage");
-  const closeOwnerLoginBtn = document.getElementById("closeOwnerLoginBtn");
-  const cancelOwnerLoginBtn = document.getElementById("cancelOwnerLoginBtn");
 
   const defaultShortcuts = {
     edit: { code: "KeyD", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
@@ -62,14 +51,21 @@
     create: { code: "KeyA", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false }
   };
 
-  let concepts = JSON.parse(JSON.stringify(defaultConcepts));
+  let concepts = {};
   let historyStack = [];
   let currentConceptKey = null;
   let notesEditing = false;
   let shortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
   let pendingShortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
   let autosaveTimer = null;
-  let editorUnlocked = !isPublicView;
+  let client = null;
+  let signedInUser = null;
+  let revision = null;
+  let changeVersion = 0;
+  let savedVersion = 0;
+  let savePromise = null;
+  let saveBlocked = false;
+  let legacyDrafts = [];
 
   function escapeHtml(value) {
     const temporaryElement = document.createElement("div");
@@ -92,90 +88,115 @@
     ) || null;
   }
 
-  function saveState() {
-    if (isPublicView && !editorUnlocked) return;
-
+  function snapshotState() {
     const noteClone = noteArea.cloneNode(true);
     const walker = document.createTreeWalker(noteClone, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       walker.currentNode.textContent = walker.currentNode.textContent.replace(/\u200B/g, "");
     }
-
-    localStorage.setItem(
-      isPublicView ? PUBLIC_DRAFT_KEY : STORAGE_KEY,
-      JSON.stringify({
-        noteHtml: noteClone.innerHTML,
-        concepts: concepts,
-        shortcuts: shortcuts
-      })
-    );
+    return {
+      note_html: noteClone.innerHTML,
+      concepts: structuredClone(concepts),
+      shortcuts: structuredClone(shortcuts)
+    };
   }
 
   function scheduleAutosave() {
     clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(saveState, 250);
+    autosaveTimer = setTimeout(() => { void saveState().catch(() => {}); }, 700);
   }
 
-  async function loadPublishedState() {
-    const response = await fetch(`${PUBLIC_STATE_URL}?v=${Date.now()}`, {
-      cache: "no-store"
-    });
-    if (!response.ok) throw new Error("Published notes are unavailable.");
-
-    const publishedState = await response.json();
-    noteArea.innerHTML = publishedState.noteHtml || "";
-    concepts = publishedState.concepts || {};
+  function markDirty() {
+    changeVersion += 1;
+    saveStatus.textContent = "Unsaved changes";
+    retrySaveBtn.hidden = true;
+    scheduleAutosave();
   }
 
-  function exportPublicSnapshot() {
-    if (notesEditing) exitNotesEditing();
+  async function saveState() {
+    clearTimeout(autosaveTimer);
+    if (!client || !signedInUser || savedVersion === changeVersion) return;
+    if (saveBlocked) throw new Error("This document changed on another device. Reload to see that version; your unsaved changes remain here until then.");
+    if (savePromise) return savePromise;
 
-    const snapshot = {
-      noteHtml: noteArea.innerHTML,
-      concepts: concepts,
-      publishedAt: new Date().toISOString()
-    };
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
-      type: "application/json"
-    });
-    const downloadUrl = URL.createObjectURL(blob);
-    const downloadLink = document.createElement("a");
-    downloadLink.href = downloadUrl;
-    downloadLink.download = "published-state.json";
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    downloadLink.remove();
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-  }
+    savePromise = (async () => {
+      while (savedVersion < changeVersion) {
+        const savingVersion = changeVersion;
+        const state = snapshotState();
+        saveStatus.textContent = "Saving…";
+        let result;
 
-  function loadState(storageKey = STORAGE_KEY) {
-    const savedText = localStorage.getItem(storageKey);
-    if (!savedText) return false;
+        if (revision === null) {
+          result = await client.from("notes").insert({
+            user_id: signedInUser.id,
+            ...state,
+            revision: 1,
+            updated_at: new Date().toISOString()
+          }).select("revision").single();
+        } else {
+          result = await client.from("notes").update({
+            ...state,
+            revision: revision + 1,
+            updated_at: new Date().toISOString()
+          }).eq("user_id", signedInUser.id).eq("revision", revision)
+            .select("revision").maybeSingle();
+        }
 
-    try {
-      const savedState = JSON.parse(savedText);
-      if (savedState.noteHtml) noteArea.innerHTML = savedState.noteHtml;
-      if (savedState.concepts) concepts = savedState.concepts;
-      if (savedState.shortcuts) {
-        shortcuts = {
-          edit: savedState.shortcuts.edit || defaultShortcuts.edit,
-          save: savedState.shortcuts.save || defaultShortcuts.save,
-          create: savedState.shortcuts.create || defaultShortcuts.create
-        };
+        if (result.error) throw result.error;
+        if (!result.data) {
+          saveBlocked = true;
+          throw new Error("This document changed on another device. Your edits were not overwritten. Copy any unsaved changes before reloading.");
+        }
+        revision = result.data.revision;
+        importLegacyBtn.hidden = true;
+        savedVersion = savingVersion;
       }
-      return true;
-    } catch (error) {
-      console.warn("Could not load notes.", error);
-      return false;
-    }
+      saveStatus.textContent = "Saved online";
+      retrySaveBtn.hidden = true;
+    })().catch(error => {
+      saveStatus.textContent = `Not saved online: ${error.message}`;
+      retrySaveBtn.hidden = saveBlocked;
+      throw error;
+    }).finally(() => { savePromise = null; });
+    return savePromise;
   }
 
-  async function hashPassword(password) {
-    const bytes = new TextEncoder().encode(password);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(digest))
-      .map(byte => byte.toString(16).padStart(2, "0"))
-      .join("");
+  async function loadState() {
+    const { data, error } = await client.from("notes")
+      .select("note_html, concepts, shortcuts, revision")
+      .eq("user_id", signedInUser.id).maybeSingle();
+    if (error) throw error;
+
+    noteArea.innerHTML = data?.note_html || "";
+    concepts = data?.concepts || {};
+    shortcuts = {
+      edit: data?.shortcuts?.edit || defaultShortcuts.edit,
+      save: data?.shortcuts?.save || defaultShortcuts.save,
+      create: data?.shortcuts?.create || defaultShortcuts.create
+    };
+    revision = data?.revision ?? null;
+    changeVersion = 0;
+    savedVersion = 0;
+    saveBlocked = false;
+    saveStatus.textContent = "Loaded from online storage";
+  }
+
+  function findLegacyDrafts() {
+    const keys = [
+      ["Old local editor", "oskuddar-fastai-freeform-v3"],
+      ["Old public-site draft", "oskuddar-fastai-freeform-v3-public-draft"]
+    ];
+    return keys.flatMap(([label, key]) => {
+      try {
+        const raw = localStorage.getItem(key); // Read-only, for one-time migration.
+        if (!raw) return [];
+        const state = JSON.parse(raw);
+        if (!state.noteHtml && !Object.keys(state.concepts || {}).length) return [];
+        return [{ label, state }];
+      } catch (_) {
+        return [];
+      }
+    });
   }
 
   function prepareLoadedNotes() {
@@ -183,31 +204,6 @@
     convertLinkSyntax(noteArea);
     attachConceptClicks(noteArea);
     updateShortcutLabels();
-  }
-
-  async function unlockPublicEditor(event) {
-    event.preventDefault();
-    const submittedHash = await hashPassword(ownerPasswordInput.value);
-
-    if (submittedHash !== EDITOR_PASSWORD_HASH) {
-      ownerLoginMessage.textContent = "Incorrect password.";
-      ownerPasswordInput.select();
-      return;
-    }
-
-    editorUnlocked = true;
-    ownerLoginDialog.close();
-    ownerPasswordInput.value = "";
-    ownerLoginMessage.textContent = "";
-    ownerEditBtn.hidden = true;
-    document.querySelector(".toolbar").hidden = false;
-    shortcutSettingsBtn.hidden = false;
-    exportSnapshotBtn.hidden = false;
-
-    closeCard();
-    loadState(PUBLIC_DRAFT_KEY);
-    prepareLoadedNotes();
-    enterNotesEditing();
   }
 
   function shortcutKeyName(code) {
@@ -283,7 +279,7 @@
 
     shortcuts = JSON.parse(JSON.stringify(pendingShortcuts));
     updateShortcutLabels();
-    saveState();
+    markDirty();
     shortcutDialog.close();
   }
 
@@ -509,6 +505,11 @@
   }
 
   function closeCard() {
+    if (!cardEditor.hidden && currentConceptKey &&
+        cardTextInput.value !== (concepts[currentConceptKey]?.text || "")) {
+      saveStatus.textContent = "Save or cancel your card changes first.";
+      return;
+    }
     conceptCard.classList.remove("open");
     historyStack = [];
     currentConceptKey = null;
@@ -550,6 +551,11 @@
   }
 
   function renderConcept(conceptKey, pushHistory = true) {
+    if (!cardEditor.hidden && currentConceptKey &&
+        cardTextInput.value !== (concepts[currentConceptKey]?.text || "")) {
+      saveStatus.textContent = "Save or cancel your card changes first.";
+      return;
+    }
     const concept = concepts[conceptKey];
     if (!concept) return;
 
@@ -563,8 +569,8 @@
 
     cardView.hidden = false;
     cardEditor.hidden = true;
-    editCardBtn.hidden = isPublicView && !editorUnlocked;
-    deleteCardBtn.hidden = isPublicView && !editorUnlocked;
+    editCardBtn.hidden = !signedInUser;
+    deleteCardBtn.hidden = !signedInUser;
     conceptCard.classList.add("open");
     backBtn.disabled = historyStack.length === 0;
 
@@ -573,7 +579,7 @@
   }
 
   function startCardEditing() {
-    if (isPublicView && !editorUnlocked) return;
+    if (!signedInUser) return;
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
     cardTextInput.value = concepts[currentConceptKey].text || "";
     cardView.hidden = true;
@@ -583,11 +589,16 @@
     cardTextInput.focus();
   }
 
-  function saveCurrentCard() {
+  async function saveCurrentCard() {
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
     concepts[currentConceptKey].text = cardTextInput.value;
-    saveState();
-    renderConcept(currentConceptKey, false);
+    markDirty();
+    try {
+      await saveState();
+      renderConcept(currentConceptKey, false);
+    } catch (_) {
+      // Keep the editor open so the unsaved text is visible.
+    }
   }
 
   function unlinkConceptEverywhere(conceptKey) {
@@ -599,7 +610,7 @@
   }
 
   function deleteCurrentCard() {
-    if (isPublicView && !editorUnlocked) return;
+    if (!signedInUser) return;
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
 
     const deletedKey = currentConceptKey;
@@ -609,18 +620,13 @@
     historyStack = historyStack.filter(key => key !== deletedKey);
     currentConceptKey = null;
 
-    saveState();
+    markDirty();
     closeCard();
     attachConceptClicks(noteArea);
   }
 
   function enterNotesEditing() {
-    if (isPublicView && !editorUnlocked) return;
-    const activeStorageKey = isPublicView ? PUBLIC_DRAFT_KEY : STORAGE_KEY;
-    const lastSavedState = localStorage.getItem(activeStorageKey);
-    if (lastSavedState) {
-      localStorage.setItem(`${activeStorageKey}-backup`, lastSavedState);
-    }
+    if (!signedInUser) return;
     normalizeTermBoundaries(noteArea);
     restoreLinkSyntax(noteArea);
     notesEditing = true;
@@ -632,7 +638,7 @@
     noteArea.focus();
   }
 
-  function exitNotesEditing() {
+  async function exitNotesEditing() {
     notesEditing = false;
     noteArea.contentEditable = "false";
     noteArea.classList.remove("editing");
@@ -642,12 +648,13 @@
     editNotesBtn.hidden = false;
     saveNotesBtn.hidden = true;
     createCardBtn.hidden = true;
-    saveState();
+    markDirty();
+    try { await saveState(); } catch (_) { /* Status displays the error. */ }
     attachConceptClicks(noteArea);
   }
 
   function createConceptFromSelection() {
-    if (isPublicView && !editorUnlocked) return;
+    if (!signedInUser) return;
     const selection = window.getSelection();
 
     if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) {
@@ -684,7 +691,7 @@
     selectedRange.insertNode(termSpan);
     selection.removeAllRanges();
 
-    saveState();
+    markDirty();
     renderConcept(conceptKey, false);
     startCardEditing();
   }
@@ -696,6 +703,7 @@
 
     event.preventDefault();
     insertPlainLineBreak();
+    markDirty();
   });
 
   noteArea.addEventListener("beforeinput", event => {
@@ -709,10 +717,16 @@
     event.preventDefault();
     const plainText = event.clipboardData.getData("text/plain");
     document.execCommand("insertText", false, plainText);
+    markDirty();
   });
 
-  noteArea.addEventListener("input", scheduleAutosave);
-  window.addEventListener("beforeunload", saveState);
+  noteArea.addEventListener("input", markDirty);
+  window.addEventListener("beforeunload", event => {
+    if (changeVersion !== savedVersion ||
+        (!cardEditor.hidden && cardTextInput.value !== (concepts[currentConceptKey]?.text || ""))) {
+      event.preventDefault();
+    }
+  });
 
   createCardBtn.addEventListener("click", event => {
     event.stopPropagation();
@@ -722,7 +736,10 @@
   editCardBtn.addEventListener("click", startCardEditing);
   saveCardBtn.addEventListener("click", saveCurrentCard);
   deleteCardBtn.addEventListener("click", deleteCurrentCard);
-  cancelCardBtn.addEventListener("click", () => renderConcept(currentConceptKey, false));
+  cancelCardBtn.addEventListener("click", () => {
+    cardTextInput.value = concepts[currentConceptKey]?.text || "";
+    renderConcept(currentConceptKey, false);
+  });
 
   backBtn.addEventListener("click", () => {
     if (!historyStack.length) return;
@@ -733,15 +750,6 @@
   closeBtn.addEventListener("click", closeCard);
 
   shortcutSettingsBtn.addEventListener("click", openShortcutDialog);
-  exportSnapshotBtn.addEventListener("click", exportPublicSnapshot);
-  ownerEditBtn.addEventListener("click", () => {
-    ownerLoginMessage.textContent = "";
-    ownerLoginDialog.showModal();
-    ownerPasswordInput.focus();
-  });
-  ownerLoginForm.addEventListener("submit", unlockPublicEditor);
-  closeOwnerLoginBtn.addEventListener("click", () => ownerLoginDialog.close());
-  cancelOwnerLoginBtn.addEventListener("click", () => ownerLoginDialog.close());
   closeShortcutDialogBtn.addEventListener("click", () => shortcutDialog.close());
   cancelShortcutsBtn.addEventListener("click", () => shortcutDialog.close());
   saveShortcutsBtn.addEventListener("click", saveShortcutSettings);
@@ -755,7 +763,7 @@
   createShortcutInput.addEventListener("keydown", event => recordShortcut(event, "create"));
 
   document.addEventListener("keydown", event => {
-    if ((isPublicView && !editorUnlocked) || event.repeat || shortcutDialog.open) return;
+    if (!signedInUser || event.repeat || shortcutDialog.open) return;
 
     if (shortcutMatches(event, shortcuts.edit)) {
       event.preventDefault();
@@ -786,28 +794,139 @@
     }
   });
 
-  async function initialize() {
-    if (isPublicView) {
-      document.body.classList.add("public-view");
-      document.querySelector(".toolbar").hidden = true;
-      shortcutSettingsBtn.hidden = true;
-      exportSnapshotBtn.hidden = true;
-      ownerEditBtn.hidden = false;
-
-      try {
-        await loadPublishedState();
-      } catch (error) {
-        console.warn(error.message);
-        noteArea.innerHTML = "<p>No notes have been published yet.</p>";
-        concepts = {};
+  loginForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = loginForm.querySelector("button");
+    button.disabled = true;
+    authMessage.textContent = "Signing in…";
+    try {
+      const { data, error } = await client.auth.signInWithPassword({
+        email: emailInput.value.trim(),
+        password: passwordInput.value
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error("Sign-in did not return an account.");
+      signedInUser = data.user;
+      await loadState();
+      prepareLoadedNotes();
+      legacyDrafts = revision === null ? findLegacyDrafts() : [];
+      importLegacyBtn.hidden = legacyDrafts.length === 0;
+      authPanel.hidden = true;
+      workspace.hidden = false;
+      shortcutSettingsBtn.hidden = false;
+      signOutBtn.hidden = false;
+      passwordInput.value = "";
+      authMessage.textContent = "";
+    } catch (error) {
+      authMessage.textContent = error.message;
+      if (signedInUser) {
+        await client.auth.signOut();
+        signedInUser = null;
       }
-    } else {
-      loadState();
+    } finally {
+      button.disabled = false;
     }
+  });
 
+  signOutBtn.addEventListener("click", async () => {
+    if (!cardEditor.hidden && cardTextInput.value !== (concepts[currentConceptKey]?.text || "")) {
+      saveStatus.textContent = "Save or cancel the card before signing out.";
+      return;
+    }
+    try {
+      await saveState();
+      const { error } = await client.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      saveStatus.textContent = `Could not sign out safely: ${error.message}`;
+      return;
+    }
+    signedInUser = null;
+    noteArea.replaceChildren();
+    noteArea.contentEditable = "false";
+    noteArea.classList.remove("editing");
+    notesEditing = false;
+    editNotesBtn.hidden = false;
+    saveNotesBtn.hidden = true;
+    createCardBtn.hidden = true;
+    concepts = {};
+    legacyDrafts = [];
+    closeCard();
+    cardEditor.hidden = true;
+    cardTextInput.value = "";
+    revision = null;
+    workspace.hidden = true;
+    authPanel.hidden = false;
+    shortcutSettingsBtn.hidden = true;
+    signOutBtn.hidden = true;
+    importLegacyBtn.hidden = true;
+    saveStatus.textContent = "";
+    emailInput.value = "";
+    passwordInput.value = "";
+  });
+
+  retrySaveBtn.addEventListener("click", () => { void saveState().catch(() => {}); });
+
+  importLegacyBtn.addEventListener("click", () => {
+    legacySourceSelect.replaceChildren();
+    legacyDrafts.forEach((draft, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `${draft.label} (${(draft.state.noteHtml || "").length} characters)`;
+      legacySourceSelect.appendChild(option);
+    });
+    legacyMessage.textContent = "";
+    legacyDialog.showModal();
+  });
+  document.getElementById("closeLegacyDialogBtn").addEventListener("click", () => legacyDialog.close());
+  document.getElementById("cancelLegacyBtn").addEventListener("click", () => legacyDialog.close());
+  confirmLegacyBtn.addEventListener("click", async () => {
+    const draft = legacyDrafts[Number(legacySourceSelect.value)];
+    if (!draft || revision !== null || changeVersion !== savedVersion ||
+        (!cardEditor.hidden && cardTextInput.value !== (concepts[currentConceptKey]?.text || ""))) {
+      legacyMessage.textContent = "Import is available only before you start a new online document.";
+      return;
+    }
+    noteArea.innerHTML = draft.state.noteHtml || "";
+    concepts = draft.state.concepts || {};
+    shortcuts = {
+      edit: draft.state.shortcuts?.edit || defaultShortcuts.edit,
+      save: draft.state.shortcuts?.save || defaultShortcuts.save,
+      create: draft.state.shortcuts?.create || defaultShortcuts.create
+    };
+    closeCard();
     prepareLoadedNotes();
+    markDirty();
+    confirmLegacyBtn.disabled = true;
+    try {
+      await saveState();
+      importLegacyBtn.hidden = true;
+      legacyDialog.close();
+    } catch (error) {
+      legacyMessage.textContent = `Import is not saved online: ${error.message}`;
+    } finally {
+      confirmLegacyBtn.disabled = false;
+    }
+  });
 
-    if (!isPublicView) enterNotesEditing();
+  function initialize() {
+    if (!config.url || !config.publishableKey) {
+      authMessage.textContent = "Online storage needs to be connected in config.js before sign-in will work.";
+      loginForm.querySelector("button").disabled = true;
+      return;
+    }
+    if (!window.supabase?.createClient) {
+      authMessage.textContent = "The sign-in library could not load. Check your connection and reload.";
+      loginForm.querySelector("button").disabled = true;
+      return;
+    }
+    client = window.supabase.createClient(config.url, config.publishableKey, {
+      auth: {
+        persistSession: false,
+        detectSessionInUrl: false,
+        autoRefreshToken: true
+      }
+    });
   }
 
   initialize();
