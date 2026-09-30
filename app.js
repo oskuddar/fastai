@@ -296,19 +296,45 @@
     return linkedText.replace(/\n/g, "<br>");
   }
 
+  function createExternalLink(url) {
+    const link = document.createElement("a");
+    link.className = "external-link";
+    link.href = url;
+    link.dataset.url = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.title = url;
+    link.textContent = "[link]";
+    return link;
+  }
+
   function flattenPastedMarkdownLinks(rootElement) {
     rootElement.querySelectorAll("a[href]:not(.external-link)").forEach(link => {
-      const previousText = link.previousSibling?.nodeType === Node.TEXT_NODE
-        ? link.previousSibling.textContent
+      const previousNode = link.previousSibling;
+      const nextNode = link.nextSibling;
+      const previousText = previousNode?.nodeType === Node.TEXT_NODE
+        ? previousNode.textContent
         : "";
-      const nextText = link.nextSibling?.nodeType === Node.TEXT_NODE
-        ? link.nextSibling.textContent
+      const nextText = nextNode?.nodeType === Node.TEXT_NODE
+        ? nextNode.textContent
         : "";
       const hasOpeningSyntax = /(?:!!|!\\!)\[$/.test(previousText);
       const hasClosingSyntax = /^\]\(https?:\/\/[^)]+\)!!/.test(nextText);
 
       if (hasOpeningSyntax && hasClosingSyntax) {
         link.replaceWith(document.createTextNode(link.textContent));
+        return;
+      }
+
+      // Browsers can automatically turn a pasted URL into an anchor, leaving
+      // the !! markers in adjacent text nodes. Convert that DOM shape directly.
+      const openingMatch = previousText.match(/(?:!!|!\\!)$/);
+      const closingMatch = nextText.match(/^!!/);
+      const url = link.href;
+      if (openingMatch && closingMatch && /^https?:\/\//i.test(url)) {
+        previousNode.textContent = previousText.slice(0, -openingMatch[0].length);
+        nextNode.textContent = nextText.slice(closingMatch[0].length);
+        link.replaceWith(createExternalLink(url));
       }
     });
     rootElement.normalize();
@@ -316,42 +342,54 @@
 
   function convertLinkSyntax(rootElement) {
     flattenPastedMarkdownLinks(rootElement);
-    const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
-    const textNodes = [];
+    const units = Array.from(rootElement.childNodes);
 
-    while (walker.nextNode()) {
-      const parent = walker.currentNode.parentElement;
-      if (!parent?.closest("a, .term")) textNodes.push(walker.currentNode);
-    }
-
-    textNodes.forEach(textNode => {
-      const text = textNode.textContent || "";
-      const linkPattern = /(?:!!|!\\!)(?:\[[^\]]*\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^!\s]+))!!/g;
-      let match;
-      let lastIndex = 0;
-      const fragment = document.createDocumentFragment();
-
-      while ((match = linkPattern.exec(text)) !== null) {
-        fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
-
-        const url = match[1] || match[2];
-        const link = document.createElement("a");
-        link.className = "external-link";
-        link.href = url;
-        link.dataset.url = url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.title = url;
-        link.textContent = "[link]";
-        fragment.appendChild(link);
-
-        lastIndex = linkPattern.lastIndex;
+    units.forEach(unit => {
+      const textNodes = [];
+      if (unit.nodeType === Node.TEXT_NODE) {
+        textNodes.push(unit);
+      } else if (unit.nodeType === Node.ELEMENT_NODE) {
+        const walker = document.createTreeWalker(unit, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) textNodes.push(walker.currentNode);
       }
 
-      if (lastIndex === 0) return;
-      fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
-      textNode.replaceWith(fragment);
+      let text = "";
+      const positions = textNodes.map(node => {
+        const value = node.textContent || "";
+        const start = text.length;
+        const excluded = node.parentElement?.closest("a, .term");
+        text += excluded ? "\u0000".repeat(value.length) : value;
+        return { node, start, end: text.length };
+      });
+
+      const linkPattern = /(?:!!|!\\!)(?:\[[^\]]*\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^!\s]+))!!/g;
+      let match;
+      const matches = [];
+      while ((match = linkPattern.exec(text)) !== null) {
+        matches.push({
+          start: match.index,
+          end: linkPattern.lastIndex,
+          url: match[1] || match[2]
+        });
+      }
+
+      matches.reverse().forEach(found => {
+        const startPosition = positions.find(position =>
+          found.start >= position.start && found.start < position.end
+        );
+        const endPosition = positions.find(position =>
+          found.end > position.start && found.end <= position.end
+        );
+        if (!startPosition || !endPosition) return;
+
+        const range = document.createRange();
+        range.setStart(startPosition.node, found.start - startPosition.start);
+        range.setEnd(endPosition.node, found.end - endPosition.start);
+        range.deleteContents();
+        range.insertNode(createExternalLink(found.url));
+      });
     });
+    rootElement.normalize();
   }
 
   function restoreLinkSyntax(rootElement) {
