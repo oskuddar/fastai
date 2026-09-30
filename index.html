@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fastai Learning Notes</title>
-  <link rel="stylesheet" href="style.css?v=9" />
+  <link rel="stylesheet" href="style.css?v=10" />
 </head>
 <body>
   <main class="page">
@@ -14,6 +14,7 @@
         <p class="subtitle">Write notes and turn any term into a connected card.</p>
       </div>
       <div class="header-actions">
+        <button id="ownerEditBtn" type="button" hidden>Owner edit</button>
         <button id="exportSnapshotBtn" type="button">Export public snapshot</button>
         <button id="shortcutSettingsBtn" type="button">Keyboard shortcuts</button>
       </div>
@@ -80,6 +81,25 @@
     </div>
   </dialog>
 
+  <dialog id="ownerLoginDialog" class="shortcut-dialog">
+    <form id="ownerLoginForm">
+      <div class="dialog-header">
+        <h2>Owner editing</h2>
+        <button id="closeOwnerLoginBtn" type="button" aria-label="Close">✕</button>
+      </div>
+      <p class="shortcut-help">Enter the owner password to edit and export a private draft.</p>
+      <label class="password-field">
+        <span>Password</span>
+        <input id="ownerPasswordInput" type="password" autocomplete="current-password" required />
+      </label>
+      <p id="ownerLoginMessage" class="shortcut-message" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="cancelOwnerLoginBtn" type="button" class="secondary">Cancel</button>
+        <button type="submit">Unlock editor</button>
+      </div>
+    </form>
+  </dialog>
+
   <aside id="conceptCard" class="concept-card" aria-live="polite">
     <div class="card-header">
       <div class="card-title-row">
@@ -108,6 +128,6 @@
     </div>
   </aside>
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

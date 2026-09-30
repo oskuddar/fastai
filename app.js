@@ -1,7 +1,8 @@
 (() => {
   const STORAGE_KEY = "oskuddar-fastai-freeform-v3";
-  const BACKUP_KEY = `${STORAGE_KEY}-backup`;
+  const PUBLIC_DRAFT_KEY = `${STORAGE_KEY}-public-draft`;
   const PUBLIC_STATE_URL = "published-state.json";
+  const EDITOR_PASSWORD_HASH = "8cdb370ee8adf754674fb7afe5cf7a925a2c16c685ad5c3ba695efab4e25c8cc";
   const isPublicView = location.hostname === "oskuddar.github.io" ||
     new URLSearchParams(location.search).has("public-preview");
 
@@ -47,6 +48,13 @@
   const exportSnapshotBtn = document.getElementById("exportSnapshotBtn");
   const editShortcutInput = document.getElementById("editShortcutInput");
   const editShortcutHint = document.getElementById("editShortcutHint");
+  const ownerEditBtn = document.getElementById("ownerEditBtn");
+  const ownerLoginDialog = document.getElementById("ownerLoginDialog");
+  const ownerLoginForm = document.getElementById("ownerLoginForm");
+  const ownerPasswordInput = document.getElementById("ownerPasswordInput");
+  const ownerLoginMessage = document.getElementById("ownerLoginMessage");
+  const closeOwnerLoginBtn = document.getElementById("closeOwnerLoginBtn");
+  const cancelOwnerLoginBtn = document.getElementById("cancelOwnerLoginBtn");
 
   const defaultShortcuts = {
     edit: { code: "KeyD", altKey: true, ctrlKey: false, metaKey: false, shiftKey: false },
@@ -61,6 +69,7 @@
   let shortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
   let pendingShortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
   let autosaveTimer = null;
+  let editorUnlocked = !isPublicView;
 
   function escapeHtml(value) {
     const temporaryElement = document.createElement("div");
@@ -84,7 +93,7 @@
   }
 
   function saveState() {
-    if (isPublicView) return;
+    if (isPublicView && !editorUnlocked) return;
 
     const noteClone = noteArea.cloneNode(true);
     const walker = document.createTreeWalker(noteClone, NodeFilter.SHOW_TEXT);
@@ -93,7 +102,7 @@
     }
 
     localStorage.setItem(
-      STORAGE_KEY,
+      isPublicView ? PUBLIC_DRAFT_KEY : STORAGE_KEY,
       JSON.stringify({
         noteHtml: noteClone.innerHTML,
         concepts: concepts,
@@ -139,9 +148,9 @@
     setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
   }
 
-  function loadState() {
-    const savedText = localStorage.getItem(STORAGE_KEY);
-    if (!savedText) return;
+  function loadState(storageKey = STORAGE_KEY) {
+    const savedText = localStorage.getItem(storageKey);
+    if (!savedText) return false;
 
     try {
       const savedState = JSON.parse(savedText);
@@ -154,9 +163,51 @@
           create: savedState.shortcuts.create || defaultShortcuts.create
         };
       }
+      return true;
     } catch (error) {
       console.warn("Could not load notes.", error);
+      return false;
     }
+  }
+
+  async function hashPassword(password) {
+    const bytes = new TextEncoder().encode(password);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest))
+      .map(byte => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  function prepareLoadedNotes() {
+    normalizeTermBoundaries(noteArea);
+    convertLinkSyntax(noteArea);
+    attachConceptClicks(noteArea);
+    updateShortcutLabels();
+  }
+
+  async function unlockPublicEditor(event) {
+    event.preventDefault();
+    const submittedHash = await hashPassword(ownerPasswordInput.value);
+
+    if (submittedHash !== EDITOR_PASSWORD_HASH) {
+      ownerLoginMessage.textContent = "Incorrect password.";
+      ownerPasswordInput.select();
+      return;
+    }
+
+    editorUnlocked = true;
+    ownerLoginDialog.close();
+    ownerPasswordInput.value = "";
+    ownerLoginMessage.textContent = "";
+    ownerEditBtn.hidden = true;
+    document.querySelector(".toolbar").hidden = false;
+    shortcutSettingsBtn.hidden = false;
+    exportSnapshotBtn.hidden = false;
+
+    closeCard();
+    loadState(PUBLIC_DRAFT_KEY);
+    prepareLoadedNotes();
+    enterNotesEditing();
   }
 
   function shortcutKeyName(code) {
@@ -512,8 +563,8 @@
 
     cardView.hidden = false;
     cardEditor.hidden = true;
-    editCardBtn.hidden = isPublicView;
-    deleteCardBtn.hidden = isPublicView;
+    editCardBtn.hidden = isPublicView && !editorUnlocked;
+    deleteCardBtn.hidden = isPublicView && !editorUnlocked;
     conceptCard.classList.add("open");
     backBtn.disabled = historyStack.length === 0;
 
@@ -522,7 +573,7 @@
   }
 
   function startCardEditing() {
-    if (isPublicView) return;
+    if (isPublicView && !editorUnlocked) return;
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
     cardTextInput.value = concepts[currentConceptKey].text || "";
     cardView.hidden = true;
@@ -548,7 +599,7 @@
   }
 
   function deleteCurrentCard() {
-    if (isPublicView) return;
+    if (isPublicView && !editorUnlocked) return;
     if (!currentConceptKey || !concepts[currentConceptKey]) return;
 
     const deletedKey = currentConceptKey;
@@ -564,9 +615,12 @@
   }
 
   function enterNotesEditing() {
-    if (isPublicView) return;
-    const lastSavedState = localStorage.getItem(STORAGE_KEY);
-    if (lastSavedState) localStorage.setItem(BACKUP_KEY, lastSavedState);
+    if (isPublicView && !editorUnlocked) return;
+    const activeStorageKey = isPublicView ? PUBLIC_DRAFT_KEY : STORAGE_KEY;
+    const lastSavedState = localStorage.getItem(activeStorageKey);
+    if (lastSavedState) {
+      localStorage.setItem(`${activeStorageKey}-backup`, lastSavedState);
+    }
     normalizeTermBoundaries(noteArea);
     restoreLinkSyntax(noteArea);
     notesEditing = true;
@@ -593,7 +647,7 @@
   }
 
   function createConceptFromSelection() {
-    if (isPublicView) return;
+    if (isPublicView && !editorUnlocked) return;
     const selection = window.getSelection();
 
     if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) {
@@ -680,6 +734,14 @@
 
   shortcutSettingsBtn.addEventListener("click", openShortcutDialog);
   exportSnapshotBtn.addEventListener("click", exportPublicSnapshot);
+  ownerEditBtn.addEventListener("click", () => {
+    ownerLoginMessage.textContent = "";
+    ownerLoginDialog.showModal();
+    ownerPasswordInput.focus();
+  });
+  ownerLoginForm.addEventListener("submit", unlockPublicEditor);
+  closeOwnerLoginBtn.addEventListener("click", () => ownerLoginDialog.close());
+  cancelOwnerLoginBtn.addEventListener("click", () => ownerLoginDialog.close());
   closeShortcutDialogBtn.addEventListener("click", () => shortcutDialog.close());
   cancelShortcutsBtn.addEventListener("click", () => shortcutDialog.close());
   saveShortcutsBtn.addEventListener("click", saveShortcutSettings);
@@ -693,7 +755,7 @@
   createShortcutInput.addEventListener("keydown", event => recordShortcut(event, "create"));
 
   document.addEventListener("keydown", event => {
-    if (isPublicView || event.repeat || shortcutDialog.open) return;
+    if ((isPublicView && !editorUnlocked) || event.repeat || shortcutDialog.open) return;
 
     if (shortcutMatches(event, shortcuts.edit)) {
       event.preventDefault();
@@ -730,6 +792,7 @@
       document.querySelector(".toolbar").hidden = true;
       shortcutSettingsBtn.hidden = true;
       exportSnapshotBtn.hidden = true;
+      ownerEditBtn.hidden = false;
 
       try {
         await loadPublishedState();
@@ -742,10 +805,7 @@
       loadState();
     }
 
-    normalizeTermBoundaries(noteArea);
-    convertLinkSyntax(noteArea);
-    attachConceptClicks(noteArea);
-    updateShortcutLabels();
+    prepareLoadedNotes();
 
     if (!isPublicView) enterNotesEditing();
   }

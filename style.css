@@ -43,6 +43,8 @@ h1 { margin: 0 0 6px; font-size: 34px; }
   flex-wrap: wrap;
 }
 
+.header-actions button[hidden] { display: none; }
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 900px) 220px;
@@ -286,6 +288,24 @@ body.public-view .note-area { grid-column: 1; }
 }
 
 .shortcut-recorder:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.password-field {
+  display: grid;
+  gap: 6px;
+}
+
+.password-field input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 11px;
+  font: inherit;
+}
+
+.password-field input:focus {
   outline: 2px solid #93c5fd;
   outline-offset: 2px;
 }
