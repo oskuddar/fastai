@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = "oskuddar-fastai-freeform-v3";
+  const BACKUP_KEY = `${STORAGE_KEY}-backup`;
   const PUBLIC_STATE_URL = "published-state.json";
   const isPublicView = location.hostname === "oskuddar.github.io" ||
     new URLSearchParams(location.search).has("public-preview");
@@ -59,6 +60,7 @@
   let notesEditing = false;
   let shortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
   let pendingShortcuts = JSON.parse(JSON.stringify(defaultShortcuts));
+  let autosaveTimer = null;
 
   function escapeHtml(value) {
     const temporaryElement = document.createElement("div");
@@ -84,14 +86,25 @@
   function saveState() {
     if (isPublicView) return;
 
+    const noteClone = noteArea.cloneNode(true);
+    const walker = document.createTreeWalker(noteClone, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      walker.currentNode.textContent = walker.currentNode.textContent.replace(/\u200B/g, "");
+    }
+
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        noteHtml: noteArea.innerHTML,
+        noteHtml: noteClone.innerHTML,
         concepts: concepts,
         shortcuts: shortcuts
       })
     );
+  }
+
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(saveState, 250);
   }
 
   async function loadPublishedState() {
@@ -552,6 +565,8 @@
 
   function enterNotesEditing() {
     if (isPublicView) return;
+    const lastSavedState = localStorage.getItem(STORAGE_KEY);
+    if (lastSavedState) localStorage.setItem(BACKUP_KEY, lastSavedState);
     normalizeTermBoundaries(noteArea);
     restoreLinkSyntax(noteArea);
     notesEditing = true;
@@ -641,6 +656,9 @@
     const plainText = event.clipboardData.getData("text/plain");
     document.execCommand("insertText", false, plainText);
   });
+
+  noteArea.addEventListener("input", scheduleAutosave);
+  window.addEventListener("beforeunload", saveState);
 
   createCardBtn.addEventListener("click", event => {
     event.stopPropagation();
